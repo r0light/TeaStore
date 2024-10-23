@@ -25,7 +25,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-dependency-plugin</artifactId>
-				<version>3.0.2</version>
+				<version>3.8.0</version>
 				<executions>
 					<execution>
 						<id>copy-dependencies</id>
@@ -41,6 +41,11 @@
 						</configuration>
 					</execution>
 				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-war-plugin</artifactId>
+				<version>3.4.0</version>
 			</plugin>
 		</plugins>
 		<finalName>tools.descartes.teastore.dockerbase</finalName>
