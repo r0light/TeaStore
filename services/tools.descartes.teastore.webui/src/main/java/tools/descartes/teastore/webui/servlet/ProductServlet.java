@@ -15,6 +15,7 @@ package tools.descartes.teastore.webui.servlet;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -52,6 +53,8 @@ public class ProductServlet extends AbstractUIServlet {
 
     private Cache<String, List<Category>> categoriesCache;
     private Cache<Long, Product> productCache;
+    private Cache<Long, String> productImageCache;
+    private Cache<String, String> webImageCache;
 
     /**
      * @see HttpServlet#HttpServlet()
@@ -60,14 +63,26 @@ public class ProductServlet extends AbstractUIServlet {
         super();
         this.categoriesCache = CachingHelper.getCacheManager().createCache("categoriesCache",
                 CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, (Class) List.class,
-                                ResourcePoolsBuilder.heap(100))
-                        .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(5)))
+                                ResourcePoolsBuilder.heap(500))
+                        .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
                         .build()
         );
         this.productCache = CachingHelper.getCacheManager().createCache("productCache",
                 CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, Product.class,
-                                ResourcePoolsBuilder.heap(100))
-                        .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(5)))
+                                ResourcePoolsBuilder.heap(500))
+                        .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                        .build()
+        );
+        this.productImageCache = CachingHelper.getCacheManager().createCache("productImageCache",
+                CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, String.class,
+                                ResourcePoolsBuilder.heap(500))
+                        .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                        .build()
+        );
+        this.webImageCache = CachingHelper.getCacheManager().createCache("webImageCache",
+                CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, String.class,
+                                ResourcePoolsBuilder.heap(500))
+                        .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
                         .build()
         );
     }
@@ -116,8 +131,14 @@ public class ProductServlet extends AbstractUIServlet {
                     getSessionBlob(request).getUID());
             List<Product> ads = new LinkedList<Product>();
             for (Long productId : productIds) {
-                ads.add(LoadBalancedCRUDOperations.getEntity(Service.PERSISTENCE, "products", Product.class,
-                        productId));
+                if (productCache.containsKey(productId)) {
+                    ads.add(productCache.get(productId));
+                } else {
+                    Product adProduct = LoadBalancedCRUDOperations.getEntity(Service.PERSISTENCE, "products", Product.class,
+                            productId);
+                    productCache.put(productId, adProduct);
+                    ads.add(adProduct);
+                }
             }
 
             if (ads.size() > 3) {
@@ -125,11 +146,37 @@ public class ProductServlet extends AbstractUIServlet {
             }
             request.setAttribute("Advertisment", ads);
 
-            request.setAttribute("productImages", LoadBalancedImageOperations.getProductImages(ads,
-                    ImageSizePreset.RECOMMENDATION.getSize()));
-            request.setAttribute("productImage", LoadBalancedImageOperations.getProductImage(p));
-            request.setAttribute("storeIcon",
-                    LoadBalancedImageOperations.getWebImage("icon", ImageSizePreset.ICON.getSize()));
+            HashMap<Long, String> images = new HashMap<>();
+            List<Product> needed = new LinkedList<>();
+            ads.forEach(ad -> {
+                if (productImageCache.containsKey(ad.getId())) {
+                    images.put(ad.getId(), productImageCache.get(ad.getId()));
+                } else {
+                    needed.add(ad);
+                }
+            });
+            HashMap<Long, String> fetched = LoadBalancedImageOperations.getProductImages(ads,
+                    ImageSizePreset.RECOMMENDATION.getSize());
+            images.putAll(fetched);
+
+            request.setAttribute("productImages", images);
+
+            if (productImageCache.containsKey(p.getId())) {
+                request.setAttribute("productImage", productImageCache.get(p.getId()));
+            } else {
+                String image = LoadBalancedImageOperations.getProductImage(p);
+                productImageCache.put(p.getId(), image);
+                request.setAttribute("productImage", image);
+            }
+
+            if (webImageCache.containsKey("icon")) {
+                request.setAttribute("storeIcon",webImageCache.get("icon"));
+            } else {
+                String storeIcon = LoadBalancedImageOperations.getWebImage("icon", ImageSizePreset.ICON.getSize());
+                webImageCache.put("icon", storeIcon);
+                request.setAttribute("storeIcon",storeIcon);
+            }
+
             request.setAttribute("helper", ELHelperUtils.UTILS);
 
             request.getRequestDispatcher("WEB-INF/pages/product.jsp").forward(request, response);
