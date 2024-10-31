@@ -15,6 +15,7 @@
 package tools.descartes.teastore.webui.servlet;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -26,6 +27,10 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import org.ehcache.Cache;
+import org.ehcache.config.builders.CacheConfigurationBuilder;
+import org.ehcache.config.builders.ExpiryPolicyBuilder;
+import org.ehcache.config.builders.ResourcePoolsBuilder;
 import tools.descartes.teastore.registryclient.Service;
 import tools.descartes.teastore.registryclient.loadbalancers.LoadBalancerTimeoutException;
 import tools.descartes.teastore.registryclient.rest.LoadBalancedCRUDOperations;
@@ -47,11 +52,47 @@ import tools.descartes.teastore.entities.message.SessionBlob;
 public class CartServlet extends AbstractUIServlet {
   private static final long serialVersionUID = 1L;
 
+  private Cache<String, List<Category>> categoriesCache;
+  private Cache<String, String> webImageCache;
+  private Cache<Integer, List<Long>> recommendationsCache;
+  private Cache<Long, Product> productCache;
+  private Cache<Long, String> productImageCache;
+
   /**
    * @see HttpServlet#HttpServlet()
    */
   public CartServlet() {
     super();
+    this.categoriesCache = CachingHelper.getCacheManager().createCache("categoriesCache",
+            CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, (Class) List.class,
+                            ResourcePoolsBuilder.heap(10))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                    .build()
+    );
+    this.webImageCache = CachingHelper.getCacheManager().createCache("webImageCache",
+            CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, String.class,
+                            ResourcePoolsBuilder.heap(10))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                    .build()
+    );
+    this.recommendationsCache = CachingHelper.getCacheManager().createCache("recommendationsCache",
+            CacheConfigurationBuilder.newCacheConfigurationBuilder(Integer.class, (Class) List.class,
+                            ResourcePoolsBuilder.heap(500))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(100)))
+                    .build()
+    );
+    this.productCache = CachingHelper.getCacheManager().createCache("productCache",
+            CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, Product.class,
+                            ResourcePoolsBuilder.heap(10))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(500)))
+                    .build()
+    );
+    this.productImageCache = CachingHelper.getCacheManager().createCache("productImageCache",
+            CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, String.class,
+                            ResourcePoolsBuilder.heap(500))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                    .build()
+    );
   }
 
   /**
@@ -76,21 +117,56 @@ public class CartServlet extends AbstractUIServlet {
       products.put(product.getId(), product);
     }
 
-    request.setAttribute("storeIcon",
-        LoadBalancedImageOperations.getWebImage("icon", ImageSizePreset.ICON.getSize()));
+    if (webImageCache.containsKey("icon")) {
+      request.setAttribute("storeIcon",webImageCache.get("icon"));
+    } else {
+      String storeIcon = LoadBalancedImageOperations.getWebImage("icon", ImageSizePreset.ICON.getSize());
+      webImageCache.put("icon", storeIcon);
+      request.setAttribute("storeIcon",storeIcon);
+    }
+
     request.setAttribute("title", "TeaStore Cart");
-    request.setAttribute("CategoryList", LoadBalancedCRUDOperations.getEntities(Service.PERSISTENCE,
-        "categories", Category.class, -1, -1));
+
+    if (categoriesCache.containsKey("all")) {
+      request.setAttribute("CategoryList", categoriesCache.get("all"));
+    } else {
+      List<Category> allCategories = LoadBalancedCRUDOperations
+              .getEntities(Service.PERSISTENCE, "categories", Category.class, -1, -1);
+      categoriesCache.put("all", allCategories);
+      request.setAttribute("CategoryList", allCategories);
+    }
+
     request.setAttribute("OrderItems", orderItems);
     request.setAttribute("Products", products);
     request.setAttribute("login", LoadBalancedStoreOperations.isLoggedIn(getSessionBlob(request)));
 
-    List<Long> productIds = LoadBalancedRecommenderOperations
-        .getRecommendations(blob.getOrderItems(), blob.getUID());
+
+    List<Long> productIds = new LinkedList<>();
+    Integer recommendationsHash = blob.getOrderItems()
+            .stream()
+            .map(OrderItem::getId)
+            .map(Object::toString)
+            .reduce("",((accumulator, itemId) -> accumulator + itemId))
+            .concat(blob.getUID().toString())
+            .hashCode();
+    if (recommendationsCache.containsKey(recommendationsHash)) {
+      productIds.addAll(recommendationsCache.get(recommendationsHash));
+    } else  {
+      List<Long> recommendedIds = LoadBalancedRecommenderOperations.getRecommendations(blob.getOrderItems(), blob.getUID());
+      productIds.addAll(recommendedIds);
+      recommendationsCache.put(recommendationsHash, recommendedIds);
+    }
+
     List<Product> ads = new LinkedList<Product>();
     for (Long productId : productIds) {
-      ads.add(LoadBalancedCRUDOperations.getEntity(Service.PERSISTENCE, "products", Product.class,
-          productId));
+      if (productCache.containsKey(productId)) {
+        ads.add(productCache.get(productId));
+      } else {
+        Product adProduct = LoadBalancedCRUDOperations.getEntity(Service.PERSISTENCE, "products", Product.class,
+                productId);
+        productCache.put(productId, adProduct);
+        ads.add(adProduct);
+      }
     }
 
     if (ads.size() > 3) {
@@ -98,7 +174,27 @@ public class CartServlet extends AbstractUIServlet {
     }
     request.setAttribute("Advertisment", ads);
 
-    request.setAttribute("productImages", LoadBalancedImageOperations.getProductPreviewImages(ads));
+
+    HashMap<Long, String> images = new HashMap<>();
+    List<Product> needed = new LinkedList<>();
+    ads.forEach(ad -> {
+      if (productImageCache.containsKey(ad.getId())) {
+        images.put(ad.getId(), productImageCache.get(ad.getId()));
+      } else {
+        needed.add(ad);
+      }
+    });
+
+    if (needed.size() > 0) {
+      HashMap<Long, String> fetched = LoadBalancedImageOperations.getProductImages(ads,
+              ImageSizePreset.RECOMMENDATION.getSize());
+      images.putAll(fetched);
+      fetched.forEach((pid, image) -> {
+        images.put(pid, image);
+        productImageCache.put(pid, image);
+      });
+    }
+    request.setAttribute("productImages", images);
 
     request.getRequestDispatcher("WEB-INF/pages/cart.jsp").forward(request, response);
 

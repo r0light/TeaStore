@@ -53,6 +53,7 @@ public class ProductServlet extends AbstractUIServlet {
 
     private Cache<String, List<Category>> categoriesCache;
     private Cache<Long, Product> productCache;
+    private Cache<Integer, List<Long>> recommendationsCache;
     private Cache<Long, String> productImageCache;
     private Cache<String, String> webImageCache;
 
@@ -63,12 +64,18 @@ public class ProductServlet extends AbstractUIServlet {
         super();
         this.categoriesCache = CachingHelper.getCacheManager().createCache("categoriesCache",
                 CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, (Class) List.class,
-                                ResourcePoolsBuilder.heap(500))
+                                ResourcePoolsBuilder.heap(10))
                         .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
                         .build()
         );
         this.productCache = CachingHelper.getCacheManager().createCache("productCache",
                 CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, Product.class,
+                                ResourcePoolsBuilder.heap(500))
+                        .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                        .build()
+        );
+        this.recommendationsCache = CachingHelper.getCacheManager().createCache("recommendationsCache",
+                CacheConfigurationBuilder.newCacheConfigurationBuilder(Integer.class, (Class) List.class,
                                 ResourcePoolsBuilder.heap(500))
                         .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
                         .build()
@@ -81,7 +88,7 @@ public class ProductServlet extends AbstractUIServlet {
         );
         this.webImageCache = CachingHelper.getCacheManager().createCache("webImageCache",
                 CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, String.class,
-                                ResourcePoolsBuilder.heap(500))
+                                ResourcePoolsBuilder.heap(10))
                         .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
                         .build()
         );
@@ -127,8 +134,24 @@ public class ProductServlet extends AbstractUIServlet {
             oi.setQuantity(1);
             items.add(oi);
             items.addAll(getSessionBlob(request).getOrderItems());
-            List<Long> productIds = LoadBalancedRecommenderOperations.getRecommendations(items,
-                    getSessionBlob(request).getUID());
+
+            List<Long> productIds = new LinkedList<>();
+            Integer recommendationsHash = items
+                    .stream()
+                    .map(OrderItem::getId)
+                    .map(Object::toString)
+                    .reduce("",((accumulator, itemId) -> accumulator + itemId))
+                    .concat(getSessionBlob(request).getUID().toString())
+                    .hashCode();
+            if (recommendationsCache.containsKey(recommendationsHash)) {
+                productIds.addAll(recommendationsCache.get(recommendationsHash));
+            } else  {
+                List<Long> recommendedIds = LoadBalancedRecommenderOperations.getRecommendations(items,
+                        getSessionBlob(request).getUID());
+                productIds.addAll(recommendedIds);
+                recommendationsCache.put(recommendationsHash, recommendedIds);
+            }
+
             List<Product> ads = new LinkedList<Product>();
             for (Long productId : productIds) {
                 if (productCache.containsKey(productId)) {
@@ -155,10 +178,16 @@ public class ProductServlet extends AbstractUIServlet {
                     needed.add(ad);
                 }
             });
-            HashMap<Long, String> fetched = LoadBalancedImageOperations.getProductImages(ads,
-                    ImageSizePreset.RECOMMENDATION.getSize());
-            images.putAll(fetched);
 
+            if (needed.size() > 0) {
+                HashMap<Long, String> fetched = LoadBalancedImageOperations.getProductImages(ads,
+                        ImageSizePreset.RECOMMENDATION.getSize());
+                images.putAll(fetched);
+                fetched.forEach((pid, image) -> {
+                    images.put(pid, image);
+                    productImageCache.put(pid, image);
+                });
+            }
             request.setAttribute("productImages", images);
 
             if (productImageCache.containsKey(p.getId())) {

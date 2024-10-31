@@ -14,6 +14,8 @@
 package tools.descartes.teastore.webui.servlet;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.util.List;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -21,6 +23,10 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import org.ehcache.Cache;
+import org.ehcache.config.builders.CacheConfigurationBuilder;
+import org.ehcache.config.builders.ExpiryPolicyBuilder;
+import org.ehcache.config.builders.ResourcePoolsBuilder;
 import tools.descartes.teastore.registryclient.Service;
 import tools.descartes.teastore.registryclient.loadbalancers.LoadBalancerTimeoutException;
 import tools.descartes.teastore.registryclient.rest.LoadBalancedCRUDOperations;
@@ -42,11 +48,40 @@ public class ProfileServlet extends AbstractUIServlet {
 
   private static final long serialVersionUID = 1L;
 
+  private Cache<String, List<Category>> categoriesCache;
+  private Cache<String, String> webImageCache;
+  private Cache<Long, User> userCache;
+  private Cache<Long, List<Order>> ordersCache;
+
   /**
    * @see HttpServlet#HttpServlet()
    */
   public ProfileServlet() {
     super();
+    this.categoriesCache = CachingHelper.getCacheManager().createCache("categoriesCache",
+            CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, (Class) List.class,
+                            ResourcePoolsBuilder.heap(10))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                    .build()
+    );
+    this.webImageCache = CachingHelper.getCacheManager().createCache("webImageCache",
+            CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, String.class,
+                            ResourcePoolsBuilder.heap(10))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                    .build()
+    );
+    this.userCache = CachingHelper.getCacheManager().createCache("userCache",
+            CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, User.class,
+                            ResourcePoolsBuilder.heap(10))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                    .build()
+    );
+    this.ordersCache = CachingHelper.getCacheManager().createCache("ordersCache",
+            CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, (Class) List.class,
+                            ResourcePoolsBuilder.heap(100))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                    .build()
+    );
   }
 
   /**
@@ -60,15 +95,43 @@ public class ProfileServlet extends AbstractUIServlet {
       redirect("/", response);
     } else {
 
-      request.setAttribute("storeIcon",
-          LoadBalancedImageOperations.getWebImage("icon", ImageSizePreset.ICON.getSize()));
-      request.setAttribute("CategoryList", LoadBalancedCRUDOperations
-          .getEntities(Service.PERSISTENCE, "categories", Category.class, -1, -1));
+      if (webImageCache.containsKey("icon")) {
+        request.setAttribute("storeIcon",webImageCache.get("icon"));
+      } else {
+        String storeIcon = LoadBalancedImageOperations.getWebImage("icon", ImageSizePreset.ICON.getSize());
+        webImageCache.put("icon", storeIcon);
+        request.setAttribute("storeIcon",storeIcon);
+      }
+
+      if (categoriesCache.containsKey("all")) {
+        request.setAttribute("CategoryList", categoriesCache.get("all"));
+      } else {
+        List<Category> allCategories = LoadBalancedCRUDOperations
+                .getEntities(Service.PERSISTENCE, "categories", Category.class, -1, -1);
+        categoriesCache.put("all", allCategories);
+        request.setAttribute("CategoryList", allCategories);
+      }
+
       request.setAttribute("title", "TeaStore Home");
-      request.setAttribute("User", LoadBalancedCRUDOperations.getEntity(Service.PERSISTENCE,
-          "users", User.class, getSessionBlob(request).getUID()));
-      request.setAttribute("Orders", LoadBalancedCRUDOperations.getEntities(Service.PERSISTENCE,
-          "orders", Order.class, "user", getSessionBlob(request).getUID(), -1, -1));
+
+      if (userCache.containsKey(getSessionBlob(request).getUID())) {
+        request.setAttribute("User", userCache.get(getSessionBlob(request).getUID()));
+      } else {
+        User user = LoadBalancedCRUDOperations.getEntity(Service.PERSISTENCE,
+                "users", User.class, getSessionBlob(request).getUID());
+        userCache.put(getSessionBlob(request).getUID(), user);
+        request.setAttribute("User", user);
+      }
+
+      if (ordersCache.containsKey(getSessionBlob(request).getUID())) {
+        request.setAttribute("Orders", ordersCache.get(getSessionBlob(request).getUID()));
+      } else {
+        List<Order> orders = LoadBalancedCRUDOperations.getEntities(Service.PERSISTENCE,
+                "orders", Order.class, "user", getSessionBlob(request).getUID(), -1, -1);
+        ordersCache.put(getSessionBlob(request).getUID(), orders);
+        request.setAttribute("Orders", orders);
+      }
+
       request.setAttribute("login",
           LoadBalancedStoreOperations.isLoggedIn(getSessionBlob(request)));
       request.setAttribute("helper", ELHelperUtils.UTILS);
