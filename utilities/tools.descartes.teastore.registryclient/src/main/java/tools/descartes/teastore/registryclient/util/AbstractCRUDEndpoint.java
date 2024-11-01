@@ -38,6 +38,8 @@ import jakarta.ws.rs.core.UriBuilder;
 @Produces({ "application/json" })
 @Consumes({ "application/json" })
 public abstract class AbstractCRUDEndpoint<T> {
+
+	private AvailabilityTimer availabilityTimer = new AvailabilityTimer(2);
 	
 	/**
 	 * Create a new entity by copying the passed entity. Any passed IDs are always ignored.
@@ -47,6 +49,11 @@ public abstract class AbstractCRUDEndpoint<T> {
 	 */
 	@POST
 	public Response create(final T entity) {
+
+		if (availabilityTimer.isDown()) {
+			return Response.serverError().build();
+		}
+
 		long id = createEntity(entity);
 		return Response.created(UriBuilder.fromResource(AbstractCRUDEndpoint.class).
 				path(String.valueOf(id)).build()).entity(id).build();
@@ -69,6 +76,11 @@ public abstract class AbstractCRUDEndpoint<T> {
 	@GET
 	@Path("/{id:[0-9][0-9]*}")
 	public Response findById(@PathParam("id") final Long id) {
+
+		if (availabilityTimer.isDown()) {
+			return Response.serverError().build();
+		}
+
 		if (id == null) {
 			return Response.status(Status.NOT_FOUND).build();
 		}
@@ -97,6 +109,11 @@ public abstract class AbstractCRUDEndpoint<T> {
 	@GET
 	public List<T> listAll(@QueryParam("start") final Integer startPosition,
 			@QueryParam("max") final Integer maxResult) {
+
+		if (availabilityTimer.isDown()) {
+			throw new RuntimeException("Server Error");
+		}
+
 		final List<T> entities = listAllEntities(parseIntQueryParam(startPosition), parseIntQueryParam(maxResult));
 		return entities;
 	}
@@ -123,6 +140,11 @@ public abstract class AbstractCRUDEndpoint<T> {
 	@PUT
 	@Path("/{id:[0-9][0-9]*}")
 	public Response update(@PathParam("id") Long id, final T entity) {
+
+		if (availabilityTimer.isDown()) {
+			return Response.serverError().build();
+		}
+
 		boolean updated = false;
 		if (id != null && entity != null) {
 			updated = updateEntity(id, entity);
@@ -152,6 +174,11 @@ public abstract class AbstractCRUDEndpoint<T> {
 	@DELETE
 	@Path("/{id:[0-9][0-9]*}")
 	public Response deleteById(@PathParam("id") final Long id) {
+
+		if (availabilityTimer.isDown()) {
+			return Response.serverError().build();
+		}
+
 		boolean deleted = deleteEntity(id);
 		if (deleted) {
 			return Response.ok().build();

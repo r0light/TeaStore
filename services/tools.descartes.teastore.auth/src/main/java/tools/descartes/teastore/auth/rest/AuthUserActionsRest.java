@@ -34,6 +34,7 @@ import tools.descartes.teastore.entities.message.SessionBlob;
 import tools.descartes.teastore.registryclient.Service;
 import tools.descartes.teastore.registryclient.loadbalancers.LoadBalancerTimeoutException;
 import tools.descartes.teastore.registryclient.rest.LoadBalancedCRUDOperations;
+import tools.descartes.teastore.registryclient.util.AvailabilityTimer;
 import tools.descartes.teastore.registryclient.util.NotFoundException;
 import tools.descartes.teastore.registryclient.util.TimeoutException;
 
@@ -46,6 +47,8 @@ import tools.descartes.teastore.registryclient.util.TimeoutException;
 @Produces({ "application/json" })
 @Consumes({ "application/json" })
 public class AuthUserActionsRest {
+
+  private AvailabilityTimer availabilityTimer = new AvailabilityTimer(2);
 
   /**
    * Persists order in database.
@@ -77,6 +80,11 @@ public class AuthUserActionsRest {
       @QueryParam("creditCardCompany") String creditCardCompany,
       @QueryParam("creditCardNumber") String creditCardNumber,
       @QueryParam("creditCardExpiryDate") String creditCardExpiryDate) {
+
+    if (availabilityTimer.isDown()) {
+      return Response.serverError().build();
+    }
+
     if (new ShaSecurityProvider().validate(blob) == null || blob.getOrderItems().isEmpty()) {
       return Response.status(Response.Status.NOT_FOUND).build();
     }
@@ -132,6 +140,11 @@ public class AuthUserActionsRest {
   @Path("login")
   public Response login(SessionBlob blob, @QueryParam("name") String name,
       @QueryParam("password") String password) {
+
+    if (availabilityTimer.isDown()) {
+      return Response.serverError().build();
+    }
+
     User user;
     try {
       user = LoadBalancedCRUDOperations.getEntityWithProperties(Service.PERSISTENCE, "users",
@@ -162,6 +175,11 @@ public class AuthUserActionsRest {
   @POST
   @Path("logout")
   public Response logout(SessionBlob blob) {
+
+    if (availabilityTimer.isDown()) {
+      return Response.serverError().build();
+    }
+
     blob.setUID(null);
     blob.setSID(null);
     blob.setOrder(new Order());
@@ -179,6 +197,11 @@ public class AuthUserActionsRest {
   @POST
   @Path("isloggedin")
   public Response isLoggedIn(SessionBlob blob) {
+
+    if (availabilityTimer.isDown()) {
+      return Response.serverError().build();
+    }
+
     return Response.status(Response.Status.OK).entity(new ShaSecurityProvider().validate(blob))
         .build();
   }

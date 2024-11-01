@@ -26,6 +26,7 @@ import jakarta.ws.rs.core.Response;
 import tools.descartes.teastore.entities.ImageSize;
 import tools.descartes.teastore.image.ImageProvider;
 import tools.descartes.teastore.image.setup.SetupController;
+import tools.descartes.teastore.registryclient.util.AvailabilityTimer;
 
 /**
  * The image provider REST endpoints for querying and controlling the image provider service.
@@ -36,6 +37,8 @@ import tools.descartes.teastore.image.setup.SetupController;
 @Consumes({ "application/json" })
 public class ImageProviderEndpoint {
 
+  private AvailabilityTimer availabilityTimer = new AvailabilityTimer(2);
+
   /**
    * Queries the image provider for the given product IDs in the given size, provided as strings.
    * @param images Map of product IDs and the corresponding image size as string.
@@ -44,6 +47,11 @@ public class ImageProviderEndpoint {
   @POST
   @Path("getProductImages")
   public Response getProductImages(HashMap<Long, String> images) {
+
+    if (availabilityTimer.isDown()) {
+      return Response.serverError().build();
+    }
+
     return Response.ok()
         .entity(ImageProvider.IP.getProductImages(images.entrySet().parallelStream().collect(
             Collectors.toMap(e -> e.getKey(), e -> ImageSize.parseImageSize(e.getValue())))))
@@ -58,6 +66,11 @@ public class ImageProviderEndpoint {
   @POST
   @Path("getWebImages")
   public Response getWebUIImages(HashMap<String, String> images) {
+
+    if (availabilityTimer.isDown()) {
+      return Response.serverError().build();
+    }
+
     return Response.ok()
         .entity(ImageProvider.IP.getWebUIImages(images.entrySet().parallelStream().collect(
             Collectors.toMap(e -> e.getKey(), e -> ImageSize.parseImageSize(e.getValue())))))

@@ -18,6 +18,7 @@ import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Response;
+import tools.descartes.teastore.registryclient.util.AvailabilityTimer;
 
 /**
  * Rest endpoint for the store cart.
@@ -28,6 +29,7 @@ import jakarta.ws.rs.core.Response;
 @Produces({ "application/json" })
 public class ReadyRest {
 
+  private AvailabilityTimer availabilityTimer = new AvailabilityTimer(2);
 
   /**
    * This methods checks, if the service is ready.
@@ -37,6 +39,11 @@ public class ReadyRest {
   @GET
   @Path("isready")
   public Response isReady() {
+
+    if (availabilityTimer.isDown()) {
+      return Response.serverError().build();
+    }
+
     return Response.ok(true).build();
   }
 

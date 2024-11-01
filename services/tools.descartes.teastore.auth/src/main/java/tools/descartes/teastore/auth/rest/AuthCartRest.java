@@ -29,6 +29,7 @@ import tools.descartes.teastore.entities.Product;
 import tools.descartes.teastore.entities.message.SessionBlob;
 import tools.descartes.teastore.registryclient.Service;
 import tools.descartes.teastore.registryclient.rest.LoadBalancedCRUDOperations;
+import tools.descartes.teastore.registryclient.util.AvailabilityTimer;
 import tools.descartes.teastore.registryclient.util.NotFoundException;
 import tools.descartes.teastore.registryclient.util.TimeoutException;
 
@@ -41,6 +42,8 @@ import tools.descartes.teastore.registryclient.util.TimeoutException;
 @Produces({ "application/json" })
 @Consumes({ "application/json" })
 public class AuthCartRest {
+
+  private AvailabilityTimer availabilityTimer = new AvailabilityTimer(2);
 
   /**
    * Adds product to cart. If the product is already in the cart the quantity is
@@ -55,6 +58,11 @@ public class AuthCartRest {
   @POST
   @Path("add/{pid}")
   public Response addProductToCart(SessionBlob blob, @PathParam("pid") final Long pid) {
+
+    if (availabilityTimer.isDown()) {
+      return Response.serverError().build();
+    }
+
     Product product;
     try {
       product = LoadBalancedCRUDOperations.getEntity(Service.PERSISTENCE, "products", Product.class,
@@ -93,6 +101,11 @@ public class AuthCartRest {
   @POST
   @Path("remove/{pid}")
   public Response removeProductFromCart(SessionBlob blob, @PathParam("pid") final Long pid) {
+
+    if (availabilityTimer.isDown()) {
+      return Response.serverError().build();
+    }
+
     OrderItem toRemove = null;
     for (OrderItem item : blob.getOrderItems()) {
       if (item.getProductId() == pid) {
@@ -123,6 +136,11 @@ public class AuthCartRest {
   @Path("{pid}")
   public Response updateQuantity(SessionBlob blob, @PathParam("pid") final Long pid,
       @QueryParam("quantity") int quantity) {
+
+    if (availabilityTimer.isDown()) {
+      return Response.serverError().build();
+    }
+
     for (OrderItem item : blob.getOrderItems()) {
       if (item.getProductId() == pid) {
         item.setQuantity(quantity);

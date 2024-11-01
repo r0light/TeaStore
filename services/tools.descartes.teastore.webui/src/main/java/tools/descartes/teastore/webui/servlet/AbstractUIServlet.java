@@ -30,8 +30,10 @@ import jakarta.servlet.http.HttpServletResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import jakarta.ws.rs.core.Response;
 import tools.descartes.teastore.registryclient.Service;
 import tools.descartes.teastore.registryclient.loadbalancers.LoadBalancerTimeoutException;
+import tools.descartes.teastore.registryclient.util.AvailabilityTimer;
 import tools.descartes.teastore.registryclient.util.NotFoundException;
 import tools.descartes.teastore.entities.Category;
 import tools.descartes.teastore.entities.message.SessionBlob;
@@ -89,6 +91,8 @@ public abstract class AbstractUIServlet extends HttpServlet {
 	 * Text for removed product.
 	 */
 	protected static final String REMOVEPRODUCT = "Product %s is removed from cart!";
+
+	private AvailabilityTimer availabilityTimer = new AvailabilityTimer(2);
 
 	/**
 	 * Try to read the SessionBlob from the cookie. If no SessioBlob exist, a new
@@ -220,6 +224,11 @@ public abstract class AbstractUIServlet extends HttpServlet {
 	 */
 	protected void doGet(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
+
+		if (availabilityTimer.isDown()) {
+			serveExceptionResponse(request, response, new RuntimeException("Server Error"));
+		}
+
 		try {
 			handleGETRequest(request, response);
 		} catch (LoadBalancerTimeoutException e) {
@@ -242,6 +251,11 @@ public abstract class AbstractUIServlet extends HttpServlet {
 	 */
 	protected void doPost(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
+
+		if (availabilityTimer.isDown()) {
+			serveExceptionResponse(request, response, new RuntimeException("Server Error"));
+		}
+
 		try {
 
 			handlePOSTRequest(request, response);

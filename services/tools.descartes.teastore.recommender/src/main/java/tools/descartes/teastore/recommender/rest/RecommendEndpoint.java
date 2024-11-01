@@ -26,6 +26,7 @@ import tools.descartes.teastore.recommender.algorithm.RecommenderSelector;
 import tools.descartes.teastore.entities.OrderItem;
 import tools.descartes.teastore.entities.Product;
 import tools.descartes.teastore.entities.User;
+import tools.descartes.teastore.registryclient.util.AvailabilityTimer;
 
 /**
  * Recommender REST endpoint.
@@ -37,6 +38,8 @@ import tools.descartes.teastore.entities.User;
 @Produces({ "application/json" })
 @Consumes({ "application/json" })
 public class RecommendEndpoint {
+
+	private AvailabilityTimer availabilityTimer = new AvailabilityTimer(2);
 
 	/**
 	 * Return a list of all {@link Product}s, that are recommended for the given
@@ -56,6 +59,11 @@ public class RecommendEndpoint {
 	 */
 	@POST
 	public Response recommend(List<OrderItem> currentItems, @QueryParam("uid") final Long uid) {
+
+		if (availabilityTimer.isDown()) {
+			return Response.serverError().build();
+		}
+
 		List<Long> recommended = RecommenderSelector.getInstance().recommendProducts(uid, currentItems);
 		return Response.ok().entity(recommended).build();
 	}

@@ -27,6 +27,7 @@ import tools.descartes.teastore.recommender.algorithm.RecommenderSelector;
 import tools.descartes.teastore.entities.OrderItem;
 import tools.descartes.teastore.entities.Product;
 import tools.descartes.teastore.entities.User;
+import tools.descartes.teastore.registryclient.util.AvailabilityTimer;
 
 /**
  * Recommender REST endpoint for single recommendation.
@@ -38,6 +39,8 @@ import tools.descartes.teastore.entities.User;
 @Produces({ "application/json" })
 @Consumes({ "application/json" })
 public class RecommendSingleEndpoint {
+
+	private AvailabilityTimer availabilityTimer = new AvailabilityTimer(2);
 
 	/**
 	 * Return a list of all {@link Product}s, that are recommended for the given
@@ -56,6 +59,11 @@ public class RecommendSingleEndpoint {
 	 */
 	@POST
 	public Response recommend(OrderItem item, @QueryParam("uid") final Long uid) {
+
+		if (availabilityTimer.isDown()) {
+			return Response.serverError().build();
+		}
+
 		if (item == null) {
 			throw new NullPointerException("OrderItem must not be null.");
 		}
