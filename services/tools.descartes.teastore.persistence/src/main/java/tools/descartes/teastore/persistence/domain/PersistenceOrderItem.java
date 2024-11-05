@@ -13,11 +13,7 @@
  */
 package tools.descartes.teastore.persistence.domain;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.Id;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PostRemove;
+import jakarta.persistence.*;
 
 import tools.descartes.teastore.persistence.repository.CacheManager;
 import tools.descartes.teastore.entities.OrderItem;
@@ -28,6 +24,7 @@ import tools.descartes.teastore.entities.OrderItem;
  *
  */
 @Entity
+@Cacheable(false)
 public class PersistenceOrderItem extends OrderItem {
 
 	@Id

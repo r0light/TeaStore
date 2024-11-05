@@ -16,14 +16,7 @@ package tools.descartes.teastore.persistence.domain;
 import java.util.ArrayList;
 import java.util.List;
 
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.PostRemove;
+import jakarta.persistence.*;
 
 import tools.descartes.teastore.persistence.repository.CacheManager;
 import tools.descartes.teastore.entities.Category;
@@ -34,6 +27,7 @@ import tools.descartes.teastore.entities.Category;
  *
  */
 @Entity
+@Cacheable(false)
 public class PersistenceCategory extends Category {
 
 	@Id
