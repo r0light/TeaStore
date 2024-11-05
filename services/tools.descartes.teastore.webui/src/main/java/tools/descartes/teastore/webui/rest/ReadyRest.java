@@ -29,8 +29,6 @@ import tools.descartes.teastore.registryclient.util.AvailabilityTimer;
 @Produces({ "application/json" })
 public class ReadyRest {
 
-  private AvailabilityTimer availabilityTimer = new AvailabilityTimer(2);
-
   /**
    * This methods checks, if the service is ready.
    *
@@ -39,10 +37,6 @@ public class ReadyRest {
   @GET
   @Path("isready")
   public Response isReady() {
-
-    if (availabilityTimer.isDown()) {
-      return Response.serverError().build();
-    }
 
     return Response.ok(true).build();
   }
