@@ -15,14 +15,18 @@
 package tools.descartes.teastore.webui.servlet;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.time.Duration;
+import java.util.*;
+
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.ehcache.Cache;
+import org.ehcache.config.builders.CacheConfigurationBuilder;
+import org.ehcache.config.builders.ExpiryPolicyBuilder;
+import org.ehcache.config.builders.ResourcePoolsBuilder;
 import tools.descartes.teastore.registryclient.Service;
 import tools.descartes.teastore.registryclient.loadbalancers.LoadBalancerTimeoutException;
 import tools.descartes.teastore.registryclient.loadbalancers.ServiceLoadBalancer;
@@ -48,11 +52,40 @@ public class CategoryServlet extends AbstractUIServlet {
   private static final List<Integer> PRODUCT_DISPLAY_COUNT_OPTIONS = Arrays.asList(5, 10, 20, 30,
       50);
 
+  private Cache<Long, Category> categoryCache;
+  private Cache<String, List<Category>> categoriesCache;
+  private Cache<Long, String> productImageCache;
+  private Cache<String, String> webImageCache;
+
   /**
    * @see HttpServlet#HttpServlet()
    */
   public CategoryServlet() {
     super();
+    this.categoryCache = CachingHelper.getCacheManager().createCache("categoryCache",
+            CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, Category.class,
+                            ResourcePoolsBuilder.heap(100))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                    .build()
+    );
+    this.categoriesCache = CachingHelper.getCacheManager().createCache("categoriesCache",
+            CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, (Class) List.class,
+                            ResourcePoolsBuilder.heap(10))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                    .build()
+    );
+    this.productImageCache = CachingHelper.getCacheManager().createCache("productImageCache",
+            CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, String.class,
+                            ResourcePoolsBuilder.heap(500))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                    .build()
+    );
+    this.webImageCache = CachingHelper.getCacheManager().createCache("webImageCache",
+            CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, String.class,
+                            ResourcePoolsBuilder.heap(10))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                    .build()
+    );
   }
 
   /**
@@ -65,8 +98,14 @@ public class CategoryServlet extends AbstractUIServlet {
       checkforCookie(request, response);
       long categoryID = Long.parseLong(request.getParameter("category"));
 
-      Category category = LoadBalancedCRUDOperations.getEntity(Service.PERSISTENCE, "categories",
-          Category.class, categoryID);
+      Category category;
+      if (categoryCache.containsKey(categoryID)) {
+        category = categoryCache.get(categoryID);
+      } else {
+        category = LoadBalancedCRUDOperations.getEntity(Service.PERSISTENCE, "categories",
+                Category.class, categoryID);
+        categoryCache.put(categoryID, category);
+      }
 
       int products = Integer.parseInt(ServiceLoadBalancer.loadBalanceRESTOperation(
           Service.PERSISTENCE, "products", Product.class,
@@ -93,12 +132,44 @@ public class CategoryServlet extends AbstractUIServlet {
       List<Product> productlist = LoadBalancedCRUDOperations.getEntities(Service.PERSISTENCE,
           "products", Product.class, "category", categoryID, (page - 1) * numberProducts,
           numberProducts);
-      request.setAttribute("productImages",
-          LoadBalancedImageOperations.getProductPreviewImages(productlist));
-      request.setAttribute("storeIcon",
-          LoadBalancedImageOperations.getWebImage("icon", ImageSizePreset.ICON.getSize()));
-      request.setAttribute("CategoryList", LoadBalancedCRUDOperations
-          .getEntities(Service.PERSISTENCE, "categories", Category.class, -1, -1));
+
+      HashMap<Long, String> images = new HashMap<>();
+      List<Product> needed = new LinkedList<>();
+      productlist.forEach(product -> {
+        if (productImageCache.containsKey(product.getId())) {
+          images.put(product.getId(), productImageCache.get(product.getId()));
+        } else {
+          needed.add(product);
+        }
+      });
+
+      if (needed.size() > 0) {
+        HashMap<Long, String> fetched = LoadBalancedImageOperations.getProductPreviewImages(needed);
+        images.putAll(fetched);
+        fetched.forEach((pid, image) -> {
+          images.put(pid, image);
+          productImageCache.put(pid, image);
+        });
+      }
+      request.setAttribute("productImages", images);
+
+      if (webImageCache.containsKey("icon")) {
+        request.setAttribute("storeIcon",webImageCache.get("icon"));
+      } else {
+        String storeIcon = LoadBalancedImageOperations.getWebImage("icon", ImageSizePreset.ICON.getSize());
+        webImageCache.put("icon", storeIcon);
+        request.setAttribute("storeIcon",storeIcon);
+      }
+
+      if (categoriesCache.containsKey("all")) {
+        request.setAttribute("CategoryList", categoriesCache.get("all"));
+      } else {
+        List<Category> allCategories = LoadBalancedCRUDOperations
+                .getEntities(Service.PERSISTENCE, "categories", Category.class, -1, -1);
+        categoriesCache.put("all", allCategories);
+        request.setAttribute("CategoryList", allCategories);
+      }
+
       request.setAttribute("title", "TeaStore Categorie " + category.getName());
 
       request.setAttribute("Productslist", productlist);

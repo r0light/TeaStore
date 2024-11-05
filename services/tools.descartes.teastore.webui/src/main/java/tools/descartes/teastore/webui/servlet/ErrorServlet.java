@@ -15,12 +15,19 @@
 package tools.descartes.teastore.webui.servlet;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.util.List;
+
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import org.ehcache.Cache;
+import org.ehcache.config.builders.CacheConfigurationBuilder;
+import org.ehcache.config.builders.ExpiryPolicyBuilder;
+import org.ehcache.config.builders.ResourcePoolsBuilder;
 import tools.descartes.teastore.registryclient.Service;
 import tools.descartes.teastore.registryclient.loadbalancers.LoadBalancerTimeoutException;
 import tools.descartes.teastore.registryclient.rest.LoadBalancedCRUDOperations;
@@ -38,11 +45,27 @@ import tools.descartes.teastore.entities.ImageSizePreset;
 public class ErrorServlet extends AbstractUIServlet {
 	private static final long serialVersionUID = 1L;
 
+	private Cache<String, List<Category>> categoriesCache;
+	private Cache<String, String> webImageCache;
+
 	/**
 	 * @see HttpServlet#HttpServlet()
 	 */
 	public ErrorServlet() {
 		super();
+
+		this.categoriesCache = CachingHelper.getCacheManager().createCache("categoriesCache",
+				CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, (Class) List.class,
+								ResourcePoolsBuilder.heap(10))
+						.withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+						.build()
+		);
+		this.webImageCache = CachingHelper.getCacheManager().createCache("webImageCache",
+				CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, String.class,
+								ResourcePoolsBuilder.heap(10))
+						.withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+						.build()
+		);
 	}
 
 	/**
@@ -57,12 +80,31 @@ public class ErrorServlet extends AbstractUIServlet {
 		if (statusCode == null) {
 			redirect("/", response);
 		} else {
-			request.setAttribute("CategoryList",
-					LoadBalancedCRUDOperations.getEntities(Service.PERSISTENCE, "categories", Category.class, -1, -1));
-			request.setAttribute("storeIcon",
-					LoadBalancedImageOperations.getWebImage("icon", ImageSizePreset.ICON.getSize()));
-			request.setAttribute("errorImage",
-					LoadBalancedImageOperations.getWebImage("error", ImageSizePreset.ERROR.getSize()));
+			if (categoriesCache.containsKey("all")) {
+				request.setAttribute("CategoryList", categoriesCache.get("all"));
+			} else {
+				List<Category> allCategories = LoadBalancedCRUDOperations
+						.getEntities(Service.PERSISTENCE, "categories", Category.class, -1, -1);
+				categoriesCache.put("all", allCategories);
+				request.setAttribute("CategoryList", allCategories);
+			}
+
+			if (webImageCache.containsKey("icon")) {
+				request.setAttribute("storeIcon",webImageCache.get("icon"));
+			} else {
+				String storeIcon = LoadBalancedImageOperations.getWebImage("icon", ImageSizePreset.ICON.getSize());
+				webImageCache.put("icon", storeIcon);
+				request.setAttribute("storeIcon",storeIcon);
+			}
+
+			if (webImageCache.containsKey("error")) {
+				request.setAttribute("errorImage",webImageCache.get("error"));
+			} else {
+				String errorIcon = LoadBalancedImageOperations.getWebImage("error", ImageSizePreset.ERROR.getSize());
+				webImageCache.put("error", errorIcon);
+				request.setAttribute("errorImage",errorIcon);
+			}
+
 			request.setAttribute("title", "TeaStore Error ");
 			request.setAttribute("login", LoadBalancedStoreOperations.isLoggedIn(getSessionBlob(request)));
 			request.getRequestDispatcher("WEB-INF/pages/error.jsp").forward(request, response);

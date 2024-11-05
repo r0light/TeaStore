@@ -14,12 +14,19 @@
 package tools.descartes.teastore.webui.servlet;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.util.List;
+
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import org.ehcache.Cache;
+import org.ehcache.config.builders.CacheConfigurationBuilder;
+import org.ehcache.config.builders.ExpiryPolicyBuilder;
+import org.ehcache.config.builders.ResourcePoolsBuilder;
 import tools.descartes.teastore.registryclient.Service;
 import tools.descartes.teastore.registryclient.loadbalancers.LoadBalancerTimeoutException;
 import tools.descartes.teastore.registryclient.rest.LoadBalancedCRUDOperations;
@@ -37,12 +44,26 @@ import tools.descartes.teastore.entities.ImageSizePreset;
 public class IndexServlet extends AbstractUIServlet {
 
 	private static final long serialVersionUID = 1L;
+	private Cache<String, List<Category>> categoriesCache;
+	private Cache<String, String> webImageCache;
 
 	/**
 	 * @see HttpServlet#HttpServlet()
 	 */
 	public IndexServlet() {
 		super();
+		this.categoriesCache = CachingHelper.getCacheManager().createCache("categoriesCache",
+				CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, (Class) List.class,
+								ResourcePoolsBuilder.heap(10))
+						.withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+						.build()
+		);
+		this.webImageCache = CachingHelper.getCacheManager().createCache("webImageCache",
+				CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, String.class,
+								ResourcePoolsBuilder.heap(10))
+						.withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+						.build()
+		);
 	}
 
 	/**
@@ -52,12 +73,26 @@ public class IndexServlet extends AbstractUIServlet {
 	protected void handleGETRequest(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException, LoadBalancerTimeoutException {
 		checkforCookie(request, response);
-		request.setAttribute("CategoryList",
-				LoadBalancedCRUDOperations.getEntities(Service.PERSISTENCE, "categories", Category.class, -1, -1));
+
+		if (categoriesCache.containsKey("all")) {
+			request.setAttribute("CategoryList", categoriesCache.get("all"));
+		} else {
+			List<Category> allCategories = LoadBalancedCRUDOperations
+					.getEntities(Service.PERSISTENCE, "categories", Category.class, -1, -1);
+			categoriesCache.put("all", allCategories);
+			request.setAttribute("CategoryList", allCategories);
+		}
+
 		request.setAttribute("title", "TeaStore Home");
 		request.setAttribute("login", LoadBalancedStoreOperations.isLoggedIn(getSessionBlob(request)));
-		request.setAttribute("storeIcon",
-				LoadBalancedImageOperations.getWebImage("icon", ImageSizePreset.ICON.getSize()));
+
+		if (webImageCache.containsKey("icon")) {
+			request.setAttribute("storeIcon",webImageCache.get("icon"));
+		} else {
+			String storeIcon = LoadBalancedImageOperations.getWebImage("icon", ImageSizePreset.ICON.getSize());
+			webImageCache.put("icon", storeIcon);
+			request.setAttribute("storeIcon",storeIcon);
+		}
 
 		request.getRequestDispatcher("WEB-INF/pages/index.jsp").forward(request, response);
 	}
