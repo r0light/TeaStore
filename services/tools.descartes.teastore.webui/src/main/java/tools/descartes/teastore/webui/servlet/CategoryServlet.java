@@ -68,19 +68,19 @@ public class CategoryServlet extends AbstractUIServlet {
                     .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
                     .build()
     );
-    this.categoriesCache = CachingHelper.getCacheManager().createCache("categoriesCache",
+    this.categoriesCache = CachingHelper.getCacheManager().createCache("categoryCategoriesCache",
             CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, (Class) List.class,
                             ResourcePoolsBuilder.heap(10))
                     .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
                     .build()
     );
-    this.productImageCache = CachingHelper.getCacheManager().createCache("productImageCache",
+    this.productImageCache = CachingHelper.getCacheManager().createCache("categoryProductImageCache",
             CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, String.class,
-                            ResourcePoolsBuilder.heap(500))
+                            ResourcePoolsBuilder.heap(100))
                     .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
                     .build()
     );
-    this.webImageCache = CachingHelper.getCacheManager().createCache("webImageCache",
+    this.webImageCache = CachingHelper.getCacheManager().createCache("categoryWebImageCache",
             CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, String.class,
                             ResourcePoolsBuilder.heap(10))
                     .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))

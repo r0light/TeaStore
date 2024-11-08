@@ -52,13 +52,13 @@ public class IndexServlet extends AbstractUIServlet {
 	 */
 	public IndexServlet() {
 		super();
-		this.categoriesCache = CachingHelper.getCacheManager().createCache("categoriesCache",
+		this.categoriesCache = CachingHelper.getCacheManager().createCache("indexCategoriesCache",
 				CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, (Class) List.class,
 								ResourcePoolsBuilder.heap(10))
 						.withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
 						.build()
 		);
-		this.webImageCache = CachingHelper.getCacheManager().createCache("webImageCache",
+		this.webImageCache = CachingHelper.getCacheManager().createCache("indexWebImageCache",
 				CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, String.class,
 								ResourcePoolsBuilder.heap(10))
 						.withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))

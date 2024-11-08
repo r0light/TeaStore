@@ -48,7 +48,7 @@ public class DataBaseServlet extends AbstractUIServlet {
 	public DataBaseServlet() {
 		super();
 
-		this.webImageCache = CachingHelper.getCacheManager().createCache("webImageCache",
+		this.webImageCache = CachingHelper.getCacheManager().createCache("databaseWebImageCache",
 				CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, String.class,
 								ResourcePoolsBuilder.heap(10))
 						.withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
