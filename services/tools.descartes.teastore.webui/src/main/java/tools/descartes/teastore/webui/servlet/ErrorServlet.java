@@ -54,13 +54,13 @@ public class ErrorServlet extends AbstractUIServlet {
 	public ErrorServlet() {
 		super();
 
-		this.categoriesCache = CachingHelper.getCacheManager().createCache("categoriesCache",
+		this.categoriesCache = CachingHelper.getCacheManager().createCache("errorCategoriesCache",
 				CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, (Class) List.class,
 								ResourcePoolsBuilder.heap(10))
 						.withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
 						.build()
 		);
-		this.webImageCache = CachingHelper.getCacheManager().createCache("webImageCache",
+		this.webImageCache = CachingHelper.getCacheManager().createCache("errorWebImageCache",
 				CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, String.class,
 								ResourcePoolsBuilder.heap(10))
 						.withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))

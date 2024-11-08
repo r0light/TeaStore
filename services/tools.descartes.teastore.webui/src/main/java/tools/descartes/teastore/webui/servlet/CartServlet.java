@@ -63,7 +63,7 @@ public class CartServlet extends AbstractUIServlet {
    */
   public CartServlet() {
     super();
-    this.categoriesCache = CachingHelper.getCacheManager().createCache("categoriesCache",
+    this.categoriesCache = CachingHelper.getCacheManager().createCache("cartCategoriesCache",
             CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, (Class) List.class,
                             ResourcePoolsBuilder.heap(10))
                     .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
