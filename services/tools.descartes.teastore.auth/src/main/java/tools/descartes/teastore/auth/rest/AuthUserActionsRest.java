@@ -14,8 +14,10 @@
 
 package tools.descartes.teastore.auth.rest;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;
@@ -24,6 +26,10 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Response;
 
+import org.ehcache.Cache;
+import org.ehcache.config.builders.CacheConfigurationBuilder;
+import org.ehcache.config.builders.ExpiryPolicyBuilder;
+import org.ehcache.config.builders.ResourcePoolsBuilder;
 import tools.descartes.teastore.auth.security.BCryptProvider;
 import tools.descartes.teastore.auth.security.RandomSessionIdGenerator;
 import tools.descartes.teastore.auth.security.ShaSecurityProvider;
@@ -46,6 +52,19 @@ import tools.descartes.teastore.registryclient.util.TimeoutException;
 @Produces({ "application/json" })
 @Consumes({ "application/json" })
 public class AuthUserActionsRest {
+
+
+  private Cache<String, User> userCache;
+
+
+  public AuthUserActionsRest() {
+    this.userCache = CachingHelper.getCacheManager().createCache("profileUserCache",
+            CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, User.class,
+                            ResourcePoolsBuilder.heap(10))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                    .build()
+    );
+  }
 
   /**
    * Persists order in database.
@@ -133,14 +152,22 @@ public class AuthUserActionsRest {
   public Response login(SessionBlob blob, @QueryParam("name") String name,
       @QueryParam("password") String password) {
     User user;
-    try {
-      user = LoadBalancedCRUDOperations.getEntityWithProperties(Service.PERSISTENCE, "users",
-          User.class, "name", name);
-    } catch (TimeoutException e) {
-      return Response.status(408).build();
-    } catch (NotFoundException e) {
-      return Response.status(Response.Status.OK).entity(blob).build();
-    }
+
+
+      if (userCache.containsKey(name)) {
+        user = userCache.get(name);
+      } else {
+        try {
+          user = LoadBalancedCRUDOperations.getEntityWithProperties(Service.PERSISTENCE, "users",
+                  User.class, "name", name);
+          userCache.put(name, user);
+        } catch (TimeoutException e) {
+          return Response.status(408).build();
+        } catch (NotFoundException e) {
+          return Response.status(Response.Status.OK).entity(blob).build();
+        }
+
+      }
 
     if (user != null && BCryptProvider.checkPassword(password, user.getPassword())
     ) {
