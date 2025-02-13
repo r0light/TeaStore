@@ -30,7 +30,7 @@ then
 	#docker buildx build --platform ${DOCKER_PLATFORMS} -t "${registry}teastore-persistence:${tag}" ../services/tools.descartes.teastore.persistence/ --push
 	#docker buildx build --platform ${DOCKER_PLATFORMS} -t "${registry}teastore-image:${tag}" ../services/tools.descartes.teastore.image/ --push
 	docker buildx build --platform ${DOCKER_PLATFORMS} -t "${registry}teastore-webui:${tag}" ../services/tools.descartes.teastore.webui/ --push
-	#docker buildx build --platform ${DOCKER_PLATFORMS} -t "${registry}teastore-auth:${tag}" ../services/tools.descartes.teastore.auth/ --push
+	docker buildx build --platform ${DOCKER_PLATFORMS} -t "${registry}teastore-auth:${tag}" ../services/tools.descartes.teastore.auth/ --push
 	#docker buildx build --platform ${DOCKER_PLATFORMS} -t "${registry}teastore-recommender:${tag}" ../services/tools.descartes.teastore.recommender/ --push
 	perl -i -pe's|.*FROM '"${registry}"'|FROM descartesresearch/|g' ../services/tools.descartes.teastore.*/Dockerfile
 	perl -i -pe's|:'"${tag}"'|:latest|g' ../services/tools.descartes.teastore.*/Dockerfile

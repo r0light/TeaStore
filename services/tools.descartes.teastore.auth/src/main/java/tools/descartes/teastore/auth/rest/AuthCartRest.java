@@ -23,6 +23,10 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Response;
 
+import org.ehcache.Cache;
+import org.ehcache.config.builders.CacheConfigurationBuilder;
+import org.ehcache.config.builders.ExpiryPolicyBuilder;
+import org.ehcache.config.builders.ResourcePoolsBuilder;
 import tools.descartes.teastore.auth.security.ShaSecurityProvider;
 import tools.descartes.teastore.entities.OrderItem;
 import tools.descartes.teastore.entities.Product;
@@ -32,6 +36,9 @@ import tools.descartes.teastore.registryclient.rest.LoadBalancedCRUDOperations;
 import tools.descartes.teastore.registryclient.util.AvailabilityTimer;
 import tools.descartes.teastore.registryclient.util.NotFoundException;
 import tools.descartes.teastore.registryclient.util.TimeoutException;
+
+import java.time.Duration;
+import java.util.List;
 
 /**
  * Rest endpoint for the store cart.
@@ -44,6 +51,17 @@ import tools.descartes.teastore.registryclient.util.TimeoutException;
 public class AuthCartRest {
 
   private AvailabilityTimer availabilityTimer = new AvailabilityTimer(2);
+
+  private Cache<Long, Product> productCache;
+
+  public AuthCartRest() {
+    this.productCache = CachingHelper.getCacheManager().createCache("productCache",
+            CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, Product.class,
+                            ResourcePoolsBuilder.heap(100))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                    .build()
+    );
+  }
 
   /**
    * Adds product to cart. If the product is already in the cart the quantity is
@@ -64,14 +82,20 @@ public class AuthCartRest {
     }
 
     Product product;
-    try {
-      product = LoadBalancedCRUDOperations.getEntity(Service.PERSISTENCE, "products", Product.class,
-          pid);
-    } catch (TimeoutException e) {
-      return Response.status(408).build();
-    } catch (NotFoundException e) {
-      return Response.status(404).build();
-    }
+
+      if (productCache.containsKey(pid)) {
+        product = productCache.get(pid);
+      } else {
+        try {
+          product = LoadBalancedCRUDOperations.getEntity(Service.PERSISTENCE, "products", Product.class,
+                  pid);
+          productCache.put(pid, product);
+        } catch (TimeoutException e) {
+          return Response.status(408).build();
+        } catch (NotFoundException e) {
+          return Response.status(404).build();
+        }
+      }
 
     for (OrderItem orderItem : blob.getOrderItems()) {
       if (orderItem.getProductId() == pid) {

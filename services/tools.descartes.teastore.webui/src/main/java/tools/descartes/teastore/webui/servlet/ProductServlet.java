@@ -101,117 +101,121 @@ public class ProductServlet extends AbstractUIServlet {
     protected void handleGETRequest(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException, LoadBalancerTimeoutException {
         checkforCookie(request, response);
-        if (request.getParameter("id") != null) {
-            Long id = Long.valueOf(request.getParameter("id"));
+            if (request.getParameter("id") != null) {
+                Long id = Long.valueOf(request.getParameter("id"));
 
-            if (categoriesCache.containsKey("all")) {
-                request.setAttribute("CategoryList", categoriesCache.get("all"));
-            } else {
-                List<Category> allCategories = LoadBalancedCRUDOperations
-                        .getEntities(Service.PERSISTENCE, "categories", Category.class, -1, -1);
-                categoriesCache.put("all", allCategories);
-                request.setAttribute("CategoryList", allCategories);
-            }
-
-            request.setAttribute("title", "TeaStore Product");
-            SessionBlob blob = getSessionBlob(request);
-            request.setAttribute("login", LoadBalancedStoreOperations.isLoggedIn(blob));
-
-            Product p;
-            if (productCache.containsKey(id)) {
-                p = productCache.get(id);
-                request.setAttribute("product", p);
-            } else {
-                p = LoadBalancedCRUDOperations.getEntity(Service.PERSISTENCE, "products",
-                        Product.class, id);
-                productCache.put(id, p);
-                request.setAttribute("product", p);
-            }
-
-            List<OrderItem> items = new LinkedList<>();
-            OrderItem oi = new OrderItem();
-            oi.setProductId(id);
-            oi.setQuantity(1);
-            items.add(oi);
-            items.addAll(getSessionBlob(request).getOrderItems());
-
-            List<Long> productIds = new LinkedList<>();
-            Integer recommendationsHash = items
-                    .stream()
-                    .map(OrderItem::getId)
-                    .map(Object::toString)
-                    .reduce("",((accumulator, itemId) -> accumulator + itemId))
-                    .concat(getSessionBlob(request).getUID().toString())
-                    .hashCode();
-            if (recommendationsCache.containsKey(recommendationsHash)) {
-                productIds.addAll(recommendationsCache.get(recommendationsHash));
-            } else  {
-                List<Long> recommendedIds = LoadBalancedRecommenderOperations.getRecommendations(items,
-                        getSessionBlob(request).getUID());
-                productIds.addAll(recommendedIds);
-                recommendationsCache.put(recommendationsHash, recommendedIds);
-            }
-
-            List<Product> ads = new LinkedList<Product>();
-            for (Long productId : productIds) {
-                if (productCache.containsKey(productId)) {
-                    ads.add(productCache.get(productId));
+                if (categoriesCache.containsKey("all")) {
+                    request.setAttribute("CategoryList", categoriesCache.get("all"));
                 } else {
-                    Product adProduct = LoadBalancedCRUDOperations.getEntity(Service.PERSISTENCE, "products", Product.class,
-                            productId);
-                    productCache.put(productId, adProduct);
-                    ads.add(adProduct);
+                    List<Category> allCategories = LoadBalancedCRUDOperations
+                            .getEntities(Service.PERSISTENCE, "categories", Category.class, -1, -1);
+                    categoriesCache.put("all", allCategories);
+                    request.setAttribute("CategoryList", allCategories);
                 }
-            }
 
-            if (ads.size() > 3) {
-                ads.subList(3, ads.size()).clear();
-            }
-            request.setAttribute("Advertisment", ads);
+                request.setAttribute("title", "TeaStore Product");
+                SessionBlob blob = getSessionBlob(request);
+                request.setAttribute("login", LoadBalancedStoreOperations.isLoggedIn(blob));
 
-            HashMap<Long, String> images = new HashMap<>();
-            List<Product> needed = new LinkedList<>();
-            ads.forEach(ad -> {
-                if (productImageCache.containsKey(ad.getId())) {
-                    images.put(ad.getId(), productImageCache.get(ad.getId()));
+                Product p;
+                if (productCache.containsKey(id)) {
+                    p = productCache.get(id);
+                    request.setAttribute("product", p);
                 } else {
-                    needed.add(ad);
+                    p = LoadBalancedCRUDOperations.getEntity(Service.PERSISTENCE, "products",
+                            Product.class, id);
+                    productCache.put(id, p);
+                    request.setAttribute("product", p);
                 }
-            });
 
-            if (needed.size() > 0) {
-                HashMap<Long, String> fetched = LoadBalancedImageOperations.getProductImages(ads,
-                        ImageSizePreset.RECOMMENDATION.getSize());
-                images.putAll(fetched);
-                fetched.forEach((pid, image) -> {
-                    images.put(pid, image);
-                    productImageCache.put(pid, image);
+                List<OrderItem> items = new LinkedList<>();
+                OrderItem oi = new OrderItem();
+                oi.setProductId(id);
+                oi.setQuantity(1);
+                items.add(oi);
+                items.addAll(getSessionBlob(request).getOrderItems());
+
+                Long userId = getSessionBlob(request).getUID() ==  null ? 0L : getSessionBlob(request).getUID();
+
+                List<Long> productIds = new LinkedList<>();
+                Integer recommendationsHash = items
+                        .stream()
+                        .filter(item -> item != null)
+                        .map(OrderItem::getId)
+                        .map(Object::toString)
+                        .reduce("", ((accumulator, itemId) -> accumulator + itemId))
+                        .concat(userId.toString())
+                        .hashCode();
+                if (recommendationsCache.containsKey(recommendationsHash)) {
+                    productIds.addAll(recommendationsCache.get(recommendationsHash));
+                } else {
+                    List<Long> recommendedIds = LoadBalancedRecommenderOperations.getRecommendations(items,
+                            getSessionBlob(request).getUID());
+                    productIds.addAll(recommendedIds);
+                    recommendationsCache.put(recommendationsHash, recommendedIds);
+                }
+
+                List<Product> ads = new LinkedList<Product>();
+                for (Long productId : productIds) {
+                    if (productCache.containsKey(productId)) {
+                        ads.add(productCache.get(productId));
+                    } else {
+                        Product adProduct = LoadBalancedCRUDOperations.getEntity(Service.PERSISTENCE, "products", Product.class,
+                                productId);
+                        productCache.put(productId, adProduct);
+                        ads.add(adProduct);
+                    }
+                }
+
+                if (ads.size() > 3) {
+                    ads.subList(3, ads.size()).clear();
+                }
+                request.setAttribute("Advertisment", ads);
+
+                HashMap<Long, String> images = new HashMap<>();
+                List<Product> needed = new LinkedList<>();
+                ads.forEach(ad -> {
+                    if (productImageCache.containsKey(ad.getId())) {
+                        images.put(ad.getId(), productImageCache.get(ad.getId()));
+                    } else {
+                        needed.add(ad);
+                    }
                 });
-            }
-            request.setAttribute("productImages", images);
 
-            if (productImageCache.containsKey(p.getId())) {
-                request.setAttribute("productImage", productImageCache.get(p.getId()));
+                if (needed.size() > 0) {
+                    HashMap<Long, String> fetched = LoadBalancedImageOperations.getProductImages(ads,
+                            ImageSizePreset.RECOMMENDATION.getSize());
+                    images.putAll(fetched);
+                    fetched.forEach((pid, image) -> {
+                        images.put(pid, image);
+                        productImageCache.put(pid, image);
+                    });
+                }
+                request.setAttribute("productImages", images);
+
+                if (productImageCache.containsKey(p.getId())) {
+                    request.setAttribute("productImage", productImageCache.get(p.getId()));
+                } else {
+                    String image = LoadBalancedImageOperations.getProductImage(p);
+                    productImageCache.put(p.getId(), image);
+                    request.setAttribute("productImage", image);
+                }
+
+                if (webImageCache.containsKey("icon")) {
+                    request.setAttribute("storeIcon", webImageCache.get("icon"));
+                } else {
+                    String storeIcon = LoadBalancedImageOperations.getWebImage("icon", ImageSizePreset.ICON.getSize());
+                    webImageCache.put("icon", storeIcon);
+                    request.setAttribute("storeIcon", storeIcon);
+                }
+
+                request.setAttribute("helper", ELHelperUtils.UTILS);
+
+                request.getRequestDispatcher("WEB-INF/pages/product.jsp").forward(request, response);
             } else {
-                String image = LoadBalancedImageOperations.getProductImage(p);
-                productImageCache.put(p.getId(), image);
-                request.setAttribute("productImage", image);
+                redirect("/", response);
             }
 
-            if (webImageCache.containsKey("icon")) {
-                request.setAttribute("storeIcon",webImageCache.get("icon"));
-            } else {
-                String storeIcon = LoadBalancedImageOperations.getWebImage("icon", ImageSizePreset.ICON.getSize());
-                webImageCache.put("icon", storeIcon);
-                request.setAttribute("storeIcon",storeIcon);
-            }
-
-            request.setAttribute("helper", ELHelperUtils.UTILS);
-
-            request.getRequestDispatcher("WEB-INF/pages/product.jsp").forward(request, response);
-        } else {
-            redirect("/", response);
-        }
     }
 
 }
