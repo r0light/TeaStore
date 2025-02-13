@@ -34,7 +34,7 @@ import tools.descartes.teastore.registryclient.util.RESTClient;
 @WebListener
 public class AuthStartup implements ServletContextListener {
 
-  private static final int REST_READ_TIMOUT = 1750;
+  private static final int REST_READ_TIMOUT = 4000;
 
   /**
    * Also set this accordingly in RegistryClientStartup.

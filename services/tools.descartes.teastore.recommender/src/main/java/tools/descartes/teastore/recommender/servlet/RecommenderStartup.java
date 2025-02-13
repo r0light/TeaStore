@@ -37,7 +37,7 @@ import tools.descartes.teastore.registryclient.util.RESTClient;
 @WebListener
 public class RecommenderStartup implements ServletContextListener {
 
-	private static final int REST_READ_TIMOUT = 1750;
+	private static final int REST_READ_TIMOUT = 4000;
 
 	private static final Logger LOG = LoggerFactory.getLogger(RecommenderStartup.class);
 
