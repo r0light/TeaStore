@@ -54,14 +54,14 @@ public class IndexServlet extends AbstractUIServlet {
 		super();
 		this.categoriesCache = CachingHelper.getCacheManager().createCache("indexCategoriesCache",
 				CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, (Class) List.class,
-								ResourcePoolsBuilder.heap(10))
-						.withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+								ResourcePoolsBuilder.heap(20))
+						.withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofMinutes(2)))
 						.build()
 		);
 		this.webImageCache = CachingHelper.getCacheManager().createCache("indexWebImageCache",
 				CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, String.class,
-								ResourcePoolsBuilder.heap(10))
-						.withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+								ResourcePoolsBuilder.heap(20))
+						.withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofMinutes(2)))
 						.build()
 		);
 	}

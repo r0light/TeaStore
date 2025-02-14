@@ -65,32 +65,32 @@ public class CartServlet extends AbstractUIServlet {
     super();
     this.categoriesCache = CachingHelper.getCacheManager().createCache("cartCategoriesCache",
             CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, (Class) List.class,
-                            ResourcePoolsBuilder.heap(10))
-                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                            ResourcePoolsBuilder.heap(20))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofMinutes(2)))
                     .build()
     );
     this.webImageCache = CachingHelper.getCacheManager().createCache("webImageCache",
             CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, String.class,
-                            ResourcePoolsBuilder.heap(10))
-                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                            ResourcePoolsBuilder.heap(20))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofMinutes(2)))
                     .build()
     );
     this.recommendationsCache = CachingHelper.getCacheManager().createCache("recommendationsCache",
             CacheConfigurationBuilder.newCacheConfigurationBuilder(Integer.class, (Class) List.class,
-                            ResourcePoolsBuilder.heap(500))
-                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(100)))
+                            ResourcePoolsBuilder.heap(100))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofMinutes(2)))
                     .build()
     );
     this.productCache = CachingHelper.getCacheManager().createCache("productCache",
             CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, Product.class,
-                            ResourcePoolsBuilder.heap(10))
-                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(500)))
+                            ResourcePoolsBuilder.heap(200))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofMinutes(2)))
                     .build()
     );
     this.productImageCache = CachingHelper.getCacheManager().createCache("productImageCache",
             CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, String.class,
-                            ResourcePoolsBuilder.heap(500))
-                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                            ResourcePoolsBuilder.heap(200))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofMinutes(2)))
                     .build()
     );
   }

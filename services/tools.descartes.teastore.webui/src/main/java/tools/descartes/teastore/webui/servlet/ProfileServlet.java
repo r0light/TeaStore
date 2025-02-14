@@ -60,26 +60,26 @@ public class ProfileServlet extends AbstractUIServlet {
     super();
     this.categoriesCache = CachingHelper.getCacheManager().createCache("profileCategoriesCache",
             CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, (Class) List.class,
-                            ResourcePoolsBuilder.heap(10))
-                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                            ResourcePoolsBuilder.heap(20))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofMinutes(2)))
                     .build()
     );
     this.webImageCache = CachingHelper.getCacheManager().createCache("profileWebImageCache",
             CacheConfigurationBuilder.newCacheConfigurationBuilder(String.class, String.class,
-                            ResourcePoolsBuilder.heap(10))
-                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                            ResourcePoolsBuilder.heap(20))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofMinutes(2)))
                     .build()
     );
     this.userCache = CachingHelper.getCacheManager().createCache("profileUserCache",
             CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, User.class,
-                            ResourcePoolsBuilder.heap(10))
-                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                            ResourcePoolsBuilder.heap(50))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofMinutes(2)))
                     .build()
     );
     this.ordersCache = CachingHelper.getCacheManager().createCache("profileOrdersCache",
             CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, (Class) List.class,
                             ResourcePoolsBuilder.heap(100))
-                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofMinutes(2)))
                     .build()
     );
   }
