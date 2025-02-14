@@ -55,8 +55,8 @@ public class AuthCartRest {
   public AuthCartRest() {
     this.productCache = CachingHelper.getCacheManager().createCache("productCache",
             CacheConfigurationBuilder.newCacheConfigurationBuilder(Long.class, Product.class,
-                            ResourcePoolsBuilder.heap(100))
-                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofSeconds(10)))
+                            ResourcePoolsBuilder.heap(200))
+                    .withExpiry(ExpiryPolicyBuilder.timeToLiveExpiration(Duration.ofMinutes(2)))
                     .build()
     );
   }
